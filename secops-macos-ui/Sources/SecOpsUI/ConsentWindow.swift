@@ -39,7 +39,6 @@ final class ConsentDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             panel.hidesOnDeactivate    = false   // stay visible when user switches apps
             panel.collectionBehavior   = [.canJoinAllSpaces, .fullScreenAuxiliary]
             panel.delegate             = self
-            NSApp.activate(ignoringOtherApps: true)
             panel.makeKeyAndOrderFront(nil)
             panel.orderFrontRegardless()
             self.panel = panel

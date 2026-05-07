@@ -38,7 +38,7 @@ let app    = NSApplication.shared
 
 switch config.mode {
 case "consent":
-    app.setActivationPolicy(.regular)
+    app.setActivationPolicy(.accessory)
     let d = ConsentDelegate(config: config)
     app.delegate = d
     app.run()

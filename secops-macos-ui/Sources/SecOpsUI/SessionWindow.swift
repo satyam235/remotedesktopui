@@ -15,36 +15,37 @@ final class SessionDelegate: NSObject, NSApplicationDelegate {
             sessionId:  config.sessionId,
             chatSocket: config.chatSocket
         )
-        let vc = NSHostingController(rootView: SessionView(model: model))
-        vc.view.wantsLayer          = true
-        vc.view.layer?.isOpaque     = false
-        vc.view.layer?.backgroundColor = .clear
+        DispatchQueue.main.async { [self] in
+            let hv = NSHostingView(rootView: SessionView(model: model))
+            hv.wantsLayer              = true
+            hv.layer?.isOpaque         = false
+            hv.layer?.backgroundColor  = .clear
 
-        let panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 360, height: 580),
-            styleMask:   [.borderless, .nonactivatingPanel],
-            backing:     .buffered,
-            defer:       false
-        )
-        panel.level                    = .floating
-        panel.isOpaque                 = false
-        panel.backgroundColor          = .clear
-        panel.hasShadow                = false  // shadow rendered in SwiftUI
-        panel.isMovableByWindowBackground = true
-        panel.collectionBehavior       = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        panel.contentViewController    = vc
-        panel.isReleasedWhenClosed     = false
+            let panel = NSPanel(
+                contentRect: NSRect(x: 0, y: 0, width: 360, height: 580),
+                styleMask:   [.borderless, .nonactivatingPanel],
+                backing:     .buffered,
+                defer:       false
+            )
+            panel.level                       = .floating
+            panel.isOpaque                    = false
+            panel.backgroundColor             = .clear
+            panel.hasShadow                   = false  // shadow rendered in SwiftUI
+            panel.isMovableByWindowBackground = true
+            panel.collectionBehavior          = [.canJoinAllSpaces, .fullScreenAuxiliary]
+            panel.contentView                 = hv     // NSHostingView directly
+            panel.isReleasedWhenClosed        = false
 
-        // Position top-right of the primary screen's visible area
-        if let screen = NSScreen.main {
-            let vf = screen.visibleFrame
-            let x  = vf.origin.x + vf.width  - 360 - 24
-            let y  = vf.origin.y + vf.height  - 580 - 24
-            panel.setFrameOrigin(NSPoint(x: x, y: y))
+            if let screen = NSScreen.main {
+                let vf = screen.visibleFrame
+                let x  = vf.origin.x + vf.width  - 360 - 24
+                let y  = vf.origin.y + vf.height  - 580 - 24
+                panel.setFrameOrigin(NSPoint(x: x, y: y))
+            }
+
+            panel.orderFrontRegardless()
+            self.panel = panel
         }
-
-        panel.orderFrontRegardless()
-        self.panel = panel
     }
 }
 

@@ -18,22 +18,28 @@ final class ConsentDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         )
         self.model = m
 
-        let vc  = NSHostingController(rootView: ConsentView(model: m))
-        let win = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 520, height: 420),
-            styleMask:   [.titled, .closable],
-            backing:     .buffered,
-            defer:       false
-        )
-        win.title                 = "Remote Access Request"
-        win.contentViewController = vc
-        win.center()
-        win.level                 = .floating
-        win.isReleasedWhenClosed  = false
-        win.delegate              = self
-        win.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
-        self.window = win
+        // Defer window creation one run-loop cycle. CLI-launched apps sometimes
+        // miss makeKeyAndOrderFront if called during the launch burst before the
+        // process has fully transitioned to a foreground app.
+        DispatchQueue.main.async { [self] in
+            let hv  = NSHostingView(rootView: ConsentView(model: m))
+            let win = NSWindow(
+                contentRect: NSRect(x: 0, y: 0, width: 520, height: 420),
+                styleMask:   [.titled, .closable],
+                backing:     .buffered,
+                defer:       false
+            )
+            win.title                = "Remote Access Request"
+            win.contentView          = hv          // NSHostingView directly; no controller
+            win.center()
+            win.level                = .floating
+            win.isReleasedWhenClosed = false
+            win.delegate             = self
+            NSApp.activate(ignoringOtherApps: true)
+            win.makeKeyAndOrderFront(nil)
+            win.orderFrontRegardless()             // force-front for CLI-launched processes
+            self.window = win
+        }
     }
 
     func windowShouldClose(_ sender: NSWindow) -> Bool {

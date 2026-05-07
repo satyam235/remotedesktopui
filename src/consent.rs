@@ -21,6 +21,8 @@ pub fn run(admin_name: String, session_id: String, timeout: u64) -> Result<(), e
         .with_min_inner_size([WIN_W, WIN_H])
         .with_max_inner_size([WIN_W, WIN_H])
         .with_resizable(false)
+        .with_maximize_button(false)
+        .with_minimize_button(false)
         .with_always_on_top();
 
     let options = NativeOptions {

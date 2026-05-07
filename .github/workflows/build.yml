@@ -9,6 +9,8 @@ on:
   workflow_dispatch:
 
 jobs:
+
+  # ── Rust build: Windows + Linux ────────────────────────────────────────────
   build:
     name: Build ${{ matrix.artifact }}
     strategy:
@@ -32,18 +34,6 @@ jobs:
             target: aarch64-unknown-linux-gnu
             binary: secops-endpoint-ui
             artifact: SecOpsLinuxRemoteDesktopNotifierLinuxArm64
-
-          # macOS ARM64 (Apple Silicon)
-          - os: macos-latest
-            target: aarch64-apple-darwin
-            binary: secops-endpoint-ui
-            artifact: SecOpsMacRemoteDesktopNotifierMacArm64
-
-          # macOS x86_64 — cross-compile from ARM runner; Apple frameworks are universal
-          - os: macos-latest
-            target: x86_64-apple-darwin
-            binary: secops-endpoint-ui
-            artifact: SecOpsMacRemoteDesktopNotifierMacAmd64
 
     runs-on: ${{ matrix.os }}
 
@@ -106,10 +96,48 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-  # Publish a GitHub Release with all binaries when a version tag is pushed.
+  # ── Swift build: macOS ARM64 + AMD64 ──────────────────────────────────────
+  # The macOS UI is a native Swift/SwiftUI app to avoid eframe/OpenGL crashes
+  # on Apple Silicon. Both architectures are built on the ARM64 runner since
+  # the Apple toolchain supports cross-compilation to x86_64 out of the box.
+  build-macos-swift:
+    name: Build macOS Swift UI (${{ matrix.arch }})
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            artifact: SecOpsMacRemoteDesktopNotifierMacArm64
+          - arch: x86_64
+            artifact: SecOpsMacRemoteDesktopNotifierMacAmd64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build (${{ matrix.arch }})
+        working-directory: secops-macos-ui
+        run: swift build -c release --arch ${{ matrix.arch }}
+
+      - name: Copy binary
+        working-directory: secops-macos-ui
+        run: |
+          BIN=$(swift build -c release --arch ${{ matrix.arch }} --show-bin-path)
+          cp "$BIN/SecOpsUI" "../${{ matrix.artifact }}"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.artifact }}
+          if-no-files-found: error
+          retention-days: 30
+
+  # ── Publish a GitHub Release with all binaries when a version tag is pushed ─
   release:
     name: Publish GitHub Release
-    needs: build
+    needs: [build, build-macos-swift]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:

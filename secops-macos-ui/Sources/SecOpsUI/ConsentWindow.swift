@@ -5,7 +5,7 @@ import SwiftUI
 
 final class ConsentDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     let config: AppConfig
-    private var window: NSWindow?
+    private var panel: NSPanel?
     private var model: ConsentModel?
 
     init(config: AppConfig) { self.config = config }
@@ -18,27 +18,31 @@ final class ConsentDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         )
         self.model = m
 
-        // Defer window creation one run-loop cycle. CLI-launched apps sometimes
-        // miss makeKeyAndOrderFront if called during the launch burst before the
-        // process has fully transitioned to a foreground app.
         DispatchQueue.main.async { [self] in
-            let hv  = NSHostingView(rootView: ConsentView(model: m))
-            let win = NSWindow(
+            let hv = NSHostingView(rootView: ConsentView(model: m))
+
+            // Use NSPanel so we get hidesOnDeactivate control. NSWindow at
+            // .floating level can lose its Z-order on macOS 14 when another app
+            // activates; NSPanel with hidesOnDeactivate=false stays visible and
+            // on top regardless of which app has focus.
+            let panel = NSPanel(
                 contentRect: NSRect(x: 0, y: 0, width: 520, height: 420),
                 styleMask:   [.titled, .closable],
                 backing:     .buffered,
                 defer:       false
             )
-            win.title                = "Remote Access Request"
-            win.contentView          = hv          // NSHostingView directly; no controller
-            win.center()
-            win.level                = .floating
-            win.isReleasedWhenClosed = false
-            win.delegate             = self
+            panel.title                = "Remote Access Request"
+            panel.contentView          = hv
+            panel.center()
+            panel.level                = .floating
+            panel.isReleasedWhenClosed = false
+            panel.hidesOnDeactivate    = false   // stay visible when user switches apps
+            panel.collectionBehavior   = [.canJoinAllSpaces, .fullScreenAuxiliary]
+            panel.delegate             = self
             NSApp.activate(ignoringOtherApps: true)
-            win.makeKeyAndOrderFront(nil)
-            win.orderFrontRegardless()             // force-front for CLI-launched processes
-            self.window = win
+            panel.makeKeyAndOrderFront(nil)
+            panel.orderFrontRegardless()
+            self.panel = panel
         }
     }
 

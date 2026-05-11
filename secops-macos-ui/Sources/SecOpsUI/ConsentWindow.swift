@@ -23,7 +23,7 @@ final class ConsentDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             let hv = NSHostingView(rootView: ConsentView(model: m))
 
             let panel = NSPanel(
-                contentRect: NSRect(x: 0, y: 0, width: 460, height: 490),
+                contentRect: NSRect(x: 0, y: 0, width: 460, height: 448),
                 styleMask:   [.titled, .closable],
                 backing:     .buffered,
                 defer:       false
@@ -242,8 +242,6 @@ struct ConsentView: View {
             }
             .padding(.bottom, 14)
 
-            Spacer()
-
             // ── Footer ────────────────────────────────────────────────────
             HStack(spacing: 4) {
                 Image(systemName: "shield")
@@ -256,7 +254,7 @@ struct ConsentView: View {
             .foregroundColor(Color(nsColor: .tertiaryLabelColor))
         }
         .padding(24)
-        .frame(width: 460, height: 490)
+        .frame(width: 460, height: 448)
         .background(Color(nsColor: .windowBackgroundColor))
     }
 }

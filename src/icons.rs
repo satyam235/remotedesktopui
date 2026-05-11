@@ -146,3 +146,133 @@ pub fn progress_bar(p: &Painter, rect: Rect, fraction: f32, fill: Color32) {
         p.rect_filled(filled, Rounding::same(radius), fill);
     }
 }
+
+/// Circular countdown timer — gray track ring, colored draining arc, centered number.
+/// `fraction` is remaining/total (1.0 = full, 0.0 = empty).
+pub fn circular_countdown(
+    p: &Painter,
+    center: Pos2,
+    size: f32,
+    fraction: f32,
+    color: Color32,
+    remaining_secs: u64,
+) {
+    let radius = size * 0.40;
+    let track_w = (size * 0.095).max(2.5);
+
+    // Gray background track
+    p.circle_stroke(
+        center,
+        radius,
+        Stroke::new(track_w, Color32::from_rgb(0xE5, 0xE7, 0xEB)),
+    );
+
+    // Colored arc draining clockwise from 12 o'clock
+    let f = fraction.clamp(0.0, 1.0);
+    if f > 0.005 {
+        let steps = 64usize;
+        let n = ((f * steps as f32).ceil() as usize).max(2);
+        let start = -std::f32::consts::FRAC_PI_2;
+        let sweep = f * std::f32::consts::TAU;
+        let mut pts: Vec<Pos2> = Vec::with_capacity(n + 1);
+        for i in 0..=n {
+            let angle = start + (i as f32 / n as f32) * sweep;
+            pts.push(center + vec2(angle.cos() * radius, angle.sin() * radius));
+        }
+        p.add(Shape::line(pts, Stroke::new(track_w, color)));
+    }
+
+    // Remaining seconds centered
+    p.text(
+        center,
+        egui::Align2::CENTER_CENTER,
+        remaining_secs.to_string(),
+        egui::FontId::proportional(size * 0.30),
+        color,
+    );
+}
+
+/// Mouse outline icon — represents "Control mouse & keyboard".
+pub fn mouse_cursor(p: &Painter, center: Pos2, size: f32, color: Color32) {
+    let half = size * 0.5;
+    let stroke = Stroke::new((size * 0.09).max(1.5), color);
+    let bw = half * 0.52;
+    let bh = half * 0.88;
+    let body = Rect::from_center_size(center + vec2(0.0, half * 0.08), vec2(bw * 2.0, bh * 2.0));
+    p.rect_stroke(body, Rounding::same(bw), stroke);
+    // Left/right button divider from top-center downward
+    let top_mid = Pos2::new(center.x, body.min.y);
+    let div_end = Pos2::new(center.x, body.min.y + bh * 0.60);
+    p.line_segment([top_mid, div_end], stroke);
+}
+
+/// Two vertical arrows (down-left, up-right) — represents file download/upload.
+pub fn file_transfer(p: &Painter, center: Pos2, size: f32, color: Color32) {
+    let half = size * 0.5;
+    let stroke = Stroke::new((size * 0.10).max(1.5), color);
+    let ah = (size * 0.13).max(2.0);
+    let gap = half * 0.28;
+
+    // Down arrow (left side)
+    let lx = center.x - gap;
+    let l_top = Pos2::new(lx, center.y - half * 0.60);
+    let l_bot = Pos2::new(lx, center.y + half * 0.28);
+    p.line_segment([l_top, l_bot], stroke);
+    p.line_segment([l_bot, Pos2::new(lx - ah, center.y + half * 0.02)], stroke);
+    p.line_segment([l_bot, Pos2::new(lx + ah, center.y + half * 0.02)], stroke);
+
+    // Up arrow (right side)
+    let rx = center.x + gap;
+    let r_top = Pos2::new(rx, center.y - half * 0.28);
+    let r_bot = Pos2::new(rx, center.y + half * 0.60);
+    p.line_segment([r_top, r_bot], stroke);
+    p.line_segment([r_top, Pos2::new(rx - ah, center.y - half * 0.02)], stroke);
+    p.line_segment([r_top, Pos2::new(rx + ah, center.y - half * 0.02)], stroke);
+}
+
+/// Padlock — shackle arc above a rounded rectangular body.
+/// Used on the end-to-end encryption note.
+pub fn lock(p: &Painter, center: Pos2, size: f32, color: Color32) {
+    let half = size * 0.5;
+    let stroke = Stroke::new((size * 0.09).max(1.5), color);
+    let bw = half * 0.62;
+    let bh = half * 0.48;
+    let body_top = center.y + half * 0.04;
+
+    // Body rectangle
+    let body = Rect::from_min_max(
+        Pos2::new(center.x - bw, body_top),
+        Pos2::new(center.x + bw, body_top + bh * 2.0),
+    );
+    p.rect_stroke(body, Rounding::same(half * 0.14), stroke);
+
+    // Shackle legs + semicircle arc
+    let sw = bw * 0.56;
+    let arc_cy = body_top - sw * 0.80;
+    p.line_segment(
+        [Pos2::new(center.x - sw, body_top), Pos2::new(center.x - sw, arc_cy)],
+        stroke,
+    );
+    p.line_segment(
+        [Pos2::new(center.x + sw, body_top), Pos2::new(center.x + sw, arc_cy)],
+        stroke,
+    );
+    let steps = 20usize;
+    let mut arc_pts: Vec<Pos2> = Vec::with_capacity(steps + 1);
+    for i in 0..=steps {
+        let angle = std::f32::consts::PI
+            + (i as f32 / steps as f32) * std::f32::consts::PI;
+        arc_pts.push(Pos2::new(
+            center.x + angle.cos() * sw,
+            arc_cy + angle.sin() * sw,
+        ));
+    }
+    p.add(Shape::line(arc_pts, stroke));
+
+    // Keyhole dot
+    p.circle_filled(
+        Pos2::new(center.x, body_top + bh * 0.90),
+        (size * 0.07).max(1.0),
+        color,
+    );
+}

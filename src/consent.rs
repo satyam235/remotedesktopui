@@ -1,20 +1,25 @@
 use std::time::{Duration, Instant};
 
 use eframe::{egui, App, NativeOptions};
-use egui::{Align, Align2, Color32, FontId, Frame, Layout, Margin, RichText, Sense, Stroke};
+use egui::{Align, Align2, Color32, FontFamily, FontId, Frame, Layout, Margin, RichText, Sense, Stroke};
 
 use crate::icons;
 use crate::theme::{
     self, with_alpha, BORDER, BORDER_STRONG, DANGER, PRIMARY, PRIMARY_HOVER, PRIMARY_PRESS,
-    SPACE_LG, SPACE_MD, SPACE_SM, SPACE_XL, SPACE_XS, SUCCESS, SURFACE, SURFACE_ALT, TEXT,
-    TEXT_MUTED, TEXT_SUBTLE, WARNING,
+    SPACE_LG, SPACE_MD, SPACE_SM, SPACE_XL, SPACE_XS, SURFACE, SURFACE_ALT, TEXT,
+    TEXT_MUTED, TEXT_SUBTLE, WARNING, FONT_SEMIBOLD,
 };
 use crate::timer::Countdown;
 
-const WIN_W: f32 = 520.0;
-const WIN_H: f32 = 420.0;
+const WIN_W: f32 = 460.0;
+const WIN_H: f32 = 490.0;
 
-pub fn run(admin_name: String, session_id: String, timeout: u64) -> Result<(), eframe::Error> {
+pub fn run(
+    admin_name: String,
+    admin_email: String,
+    session_id: String,
+    timeout: u64,
+) -> Result<(), eframe::Error> {
     let viewport = egui::ViewportBuilder::default()
         .with_title("Remote Access Request")
         .with_inner_size([WIN_W, WIN_H])
@@ -36,7 +41,7 @@ pub fn run(admin_name: String, session_id: String, timeout: u64) -> Result<(), e
         options,
         Box::new(move |cc| {
             theme::apply(&cc.egui_ctx);
-            Box::new(ConsentApp::new(admin_name, session_id, timeout))
+            Box::new(ConsentApp::new(admin_name, admin_email, session_id, timeout))
         }),
     )
 }
@@ -49,6 +54,7 @@ enum Decision {
 
 struct ConsentApp {
     admin_name: String,
+    admin_email: String,
     session_id: String,
     countdown: Countdown,
     countdown_total: u64,
@@ -58,9 +64,10 @@ struct ConsentApp {
 }
 
 impl ConsentApp {
-    fn new(admin_name: String, session_id: String, timeout: u64) -> Self {
+    fn new(admin_name: String, admin_email: String, session_id: String, timeout: u64) -> Self {
         Self {
             admin_name,
+            admin_email,
             session_id,
             countdown: Countdown::new(timeout),
             countdown_total: timeout.max(1),
@@ -130,7 +137,7 @@ impl App for ConsentApp {
         } else if remaining <= 15 {
             WARNING
         } else {
-            SUCCESS
+            PRIMARY
         };
 
         egui::CentralPanel::default()
@@ -145,23 +152,29 @@ impl App for ConsentApp {
                     }),
             )
             .show(ctx, |ui| {
-                // ── Hero block ────────────────────────────────────────────
+                // ── Header: circular timer + title/subtitle ───────────────
                 ui.horizontal(|ui| {
-                    let (rect, _) =
-                        ui.allocate_exact_size(egui::vec2(48.0, 48.0), Sense::hover());
-                    ui.painter()
-                        .rect_filled(rect, theme::r_md(), theme::PRIMARY_TINT);
-                    icons::shield(ui.painter(), rect.center(), 26.0, PRIMARY);
+                    let timer_size = 58.0;
+                    let (tr, _) =
+                        ui.allocate_exact_size(egui::vec2(timer_size, timer_size), Sense::hover());
+                    let frac = (remaining as f32) / (self.countdown_total as f32).max(1.0);
+                    icons::circular_countdown(
+                        ui.painter(),
+                        tr.center(),
+                        timer_size,
+                        frac,
+                        countdown_color,
+                        remaining,
+                    );
 
                     ui.add_space(SPACE_MD + 2.0);
 
                     ui.vertical(|ui| {
-                        ui.spacing_mut().item_spacing.y = 4.0;
+                        ui.spacing_mut().item_spacing.y = 5.0;
                         ui.label(
                             RichText::new("Remote Access Request")
-                                .size(18.0)
-                                .strong()
-                                .color(TEXT),
+                                .font(FontId::new(19.0, FontFamily::Name(FONT_SEMIBOLD.into())))
+                                .color(Color32::from_rgb(0x0D, 0x14, 0x21)),
                         );
                         ui.label(
                             RichText::new(
@@ -169,94 +182,107 @@ impl App for ConsentApp {
                                  control your screen.",
                             )
                             .size(12.5)
-                            .color(TEXT_MUTED),
+                            .color(TEXT_SUBTLE),
+                        );
+                        ui.label(
+                            RichText::new("Approve only if you initiated this request.")
+                                .size(12.0)
+                                .color(TEXT_MUTED),
                         );
                     });
                 });
 
-                ui.add_space(SPACE_LG + 2.0);
+                ui.add_space(SPACE_LG);
 
-                // ── Detail card (tinted vs white body for one elevation step) ─
+                // ── Admin identity card ───────────────────────────────────
                 Frame::none()
                     .fill(SURFACE_ALT)
                     .stroke(Stroke::new(1.0, BORDER))
                     .rounding(theme::r_md())
-                    .inner_margin(Margin::symmetric(SPACE_LG, SPACE_SM + 2.0))
+                    .inner_margin(Margin::symmetric(SPACE_LG, SPACE_SM + 4.0))
                     .show(ui, |ui| {
-                        ui.spacing_mut().item_spacing = egui::vec2(0.0, 0.0);
+                        // Force the frame to stretch full width
+                        ui.set_min_width(ui.available_width());
+                        ui.horizontal(|ui| {
+                            let (ar, _) =
+                                ui.allocate_exact_size(egui::vec2(38.0, 38.0), Sense::hover());
+                            icons::avatar(
+                                ui.painter(),
+                                ar.center(),
+                                38.0,
+                                PRIMARY,
+                                &self.admin_name,
+                            );
 
-                        kv_row(ui, "REQUESTED BY", |ui| {
-                            ui.horizontal(|ui| {
-                                let (a, _) = ui
-                                    .allocate_exact_size(egui::vec2(24.0, 24.0), Sense::hover());
-                                icons::avatar(
-                                    ui.painter(),
-                                    a.center(),
-                                    24.0,
-                                    PRIMARY,
-                                    &self.admin_name,
-                                );
-                                ui.add_space(SPACE_SM + 2.0);
+                            ui.add_space(SPACE_SM + 2.0);
+
+                            ui.vertical(|ui| {
+                                ui.spacing_mut().item_spacing.y = 3.0;
                                 ui.label(
                                     RichText::new(&self.admin_name)
-                                        .size(13.0)
-                                        .color(TEXT)
-                                        .strong(),
+                                        .font(FontId::new(14.5, FontFamily::Name(FONT_SEMIBOLD.into())))
+                                        .color(TEXT),
                                 );
-                            });
-                        });
-
-                        divider(ui);
-
-                        kv_row(ui, "EXPIRES IN", |ui| {
-                            ui.vertical(|ui| {
-                                ui.spacing_mut().item_spacing.y = 6.0;
-                                ui.horizontal(|ui| {
+                                if !self.admin_email.is_empty() {
                                     ui.label(
-                                        RichText::new(format!("{}s", remaining))
-                                            .size(14.0)
-                                            .color(countdown_color)
-                                            .strong()
-                                            .monospace(),
+                                        RichText::new(&self.admin_email)
+                                            .size(12.0)
+                                            .color(TEXT_SUBTLE),
                                     );
-                                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                                        ui.label(
-                                            RichText::new("auto-decline at 0s")
-                                                .size(10.5)
-                                                .color(theme::TEXT_FAINT),
-                                        );
-                                    });
-                                });
-                                let avail = ui.available_width();
-                                let (rect, _) = ui
-                                    .allocate_exact_size(egui::vec2(avail, 4.0), Sense::hover());
-                                let frac = (remaining as f32)
-                                    / (self.countdown_total as f32).max(1.0);
-                                icons::progress_bar(
-                                    ui.painter(),
-                                    rect,
-                                    frac,
-                                    countdown_color,
-                                );
+                                }
                             });
                         });
+                    });
 
-                        divider(ui);
+                ui.add_space(SPACE_LG);
 
-                        kv_row(ui, "PRIVACY", |ui| {
-                            ui.horizontal(|ui| {
-                                let (a, _) = ui
-                                    .allocate_exact_size(egui::vec2(18.0, 18.0), Sense::hover());
-                                icons::eye(ui.painter(), a.center(), 14.0, TEXT_MUTED);
-                                ui.add_space(SPACE_SM + 2.0);
-                                ui.label(
-                                    RichText::new(
-                                        "Your screen activity will be visible to the technician",
-                                    )
-                                    .size(12.5)
-                                    .color(TEXT_SUBTLE),
-                                );
-                            });
+                // ── Permissions list ──────────────────────────────────────
+                ui.label(
+                    RichText::new("PERMISSIONS REQUESTED")
+                        .font(FontId::new(11.0, FontFamily::Name(FONT_SEMIBOLD.into())))
+                        .color(TEXT_SUBTLE),
+                );
+                ui.add_space(SPACE_SM);
+
+                permission_row(
+                    ui,
+                    |p, c, s| icons::eye(p, c, s, PRIMARY),
+                    "View your screen",
+                );
+                ui.add_space(SPACE_XS);
+                permission_row(
+                    ui,
+                    |p, c, s| icons::mouse_cursor(p, c, s, PRIMARY),
+                    "Control mouse & keyboard",
+                );
+                ui.add_space(SPACE_XS);
+                permission_row(
+                    ui,
+                    |p, c, s| icons::file_transfer(p, c, s, PRIMARY),
+                    "Can download/upload files from/to the system",
+                );
+
+                ui.add_space(SPACE_LG);
+
+                // ── Encryption note ───────────────────────────────────────
+                Frame::none()
+                    .fill(theme::PRIMARY_TINT)
+                    .stroke(Stroke::new(1.0, with_alpha(PRIMARY, 45)))
+                    .rounding(theme::r_md())
+                    .inner_margin(Margin::symmetric(SPACE_MD, SPACE_SM + 2.0))
+                    .show(ui, |ui| {
+                        ui.horizontal(|ui| {
+                            let (lr, _) =
+                                ui.allocate_exact_size(egui::vec2(16.0, 16.0), Sense::hover());
+                            icons::lock(ui.painter(), lr.center(), 14.0, theme::PRIMARY_INK);
+                            ui.add_space(SPACE_SM);
+                            ui.label(
+                                RichText::new(
+                                    "Session is end-to-end encrypted and audit-logged.",
+                                )
+                                .size(12.5)
+                                .color(theme::PRIMARY_INK),
+                            );
                         });
                     });
 
@@ -275,11 +301,11 @@ impl App for ConsentApp {
                     });
                 });
 
-                // ── Footer (anchored to bottom of the body) ───────────────
+                // ── Footer ────────────────────────────────────────────────
                 let footer_h = 14.0;
-                let remaining = ui.available_height() - footer_h;
-                if remaining > 0.0 {
-                    ui.add_space(remaining);
+                let remaining_space = ui.available_height() - footer_h;
+                if remaining_space > 0.0 {
+                    ui.add_space(remaining_space);
                 }
                 ui.horizontal(|ui| {
                     let (mark_rect, _) =
@@ -292,11 +318,7 @@ impl App for ConsentApp {
                             .color(theme::TEXT_FAINT)
                             .strong(),
                     );
-                    ui.label(
-                        RichText::new("·")
-                            .size(10.5)
-                            .color(theme::TEXT_FAINT),
-                    );
+                    ui.label(RichText::new("·").size(10.5).color(theme::TEXT_FAINT));
                     ui.label(
                         RichText::new("Managed by your IT department")
                             .size(10.5)
@@ -307,33 +329,19 @@ impl App for ConsentApp {
     }
 }
 
-// ── Detail card primitives ─────────────────────────────────────────────────
+// ── Permission row helper ──────────────────────────────────────────────────
 
-fn kv_row<F: FnOnce(&mut egui::Ui)>(ui: &mut egui::Ui, label: &str, value: F) {
-    Frame::none()
-        .inner_margin(Margin::symmetric(0.0, SPACE_SM + 2.0))
-        .show(ui, |ui| {
-            ui.horizontal(|ui| {
-                let label_w = 110.0;
-                ui.add_sized(
-                    egui::vec2(label_w, 18.0),
-                    egui::Label::new(
-                        RichText::new(label)
-                            .size(10.5)
-                            .color(TEXT_MUTED)
-                            .strong(),
-                    ),
-                );
-                value(ui);
-            });
-        });
-}
-
-fn divider(ui: &mut egui::Ui) {
-    let avail = ui.available_width();
-    let (rect, _) = ui.allocate_exact_size(egui::vec2(avail, 1.0), Sense::hover());
-    ui.painter()
-        .line_segment([rect.left_top(), rect.right_top()], Stroke::new(1.0, BORDER));
+fn permission_row(
+    ui: &mut egui::Ui,
+    draw_icon: impl FnOnce(&egui::Painter, egui::Pos2, f32),
+    text: &str,
+) {
+    ui.horizontal(|ui| {
+        let (ir, _) = ui.allocate_exact_size(egui::vec2(20.0, 20.0), Sense::hover());
+        draw_icon(ui.painter(), ir.center(), 15.0);
+        ui.add_space(SPACE_SM);
+        ui.label(RichText::new(text).size(13.5).color(TEXT));
+    });
 }
 
 // ── Buttons ────────────────────────────────────────────────────────────────

@@ -8,7 +8,7 @@
 // reach for them without repeated round-trips to this file.
 #![allow(dead_code)]
 
-use egui::{epaint::Shadow, Color32, FontFamily, FontId, Margin, Rounding, Stroke, TextStyle, Visuals};
+use egui::{epaint::Shadow, Color32, FontData, FontDefinitions, FontFamily, FontId, Margin, Rounding, Stroke, TextStyle, Visuals};
 
 // ── Surfaces ────────────────────────────────────────────────────────────────
 pub const BG:           Color32 = Color32::from_rgb(0xF7, 0xF8, 0xFA); // app background
@@ -81,15 +81,50 @@ pub fn r_md() -> Rounding { Rounding::same(RADIUS_MD) }
 pub fn r_lg() -> Rounding { Rounding::same(RADIUS_LG) }
 
 // ── Typography ──────────────────────────────────────────────────────────────
-// egui ships only one weight per font family; we lean on size + .strong()
-// (renders bold) + tracked uppercase labels for hierarchy. The ratios below
-// are tuned for crispness on both 1x and 2x displays.
+
+/// Named family constants so call sites don't use raw strings.
+pub const FONT_REGULAR:  &str = "geist-regular";
+pub const FONT_SEMIBOLD: &str = "geist-semibold";
+
+/// Load Geist Regular + SemiBold into egui's font system.
+/// Called once from `apply` — fonts are embedded in the binary via include_bytes!.
+fn load_fonts(ctx: &egui::Context) {
+    let mut fonts = FontDefinitions::default();
+
+    fonts.font_data.insert(
+        FONT_REGULAR.to_owned(),
+        FontData::from_static(include_bytes!("../fonts/Geist-Regular.ttf")),
+    );
+    fonts.font_data.insert(
+        FONT_SEMIBOLD.to_owned(),
+        FontData::from_static(include_bytes!("../fonts/Geist-SemiBold.ttf")),
+    );
+
+    // Geist-Regular is the default proportional font (highest priority).
+    fonts
+        .families
+        .entry(FontFamily::Proportional)
+        .or_default()
+        .insert(0, FONT_REGULAR.to_owned());
+
+    // Dedicated semibold family — use FontFamily::Name(FONT_SEMIBOLD.into())
+    // at call sites that want heavier weight (title, admin name, buttons).
+    fonts.families.insert(
+        FontFamily::Name(FONT_SEMIBOLD.into()),
+        vec![FONT_SEMIBOLD.to_owned()],
+    );
+
+    ctx.set_fonts(fonts);
+}
+
 pub fn apply(ctx: &egui::Context) {
+    load_fonts(ctx);
     let mut style = (*ctx.style()).clone();
 
-    style.text_styles.insert(TextStyle::Heading,    FontId::new(20.0, FontFamily::Proportional));
+    let semi = FontFamily::Name(FONT_SEMIBOLD.into());
+    style.text_styles.insert(TextStyle::Heading,    FontId::new(20.0, semi.clone()));
     style.text_styles.insert(TextStyle::Body,       FontId::new(13.5, FontFamily::Proportional));
-    style.text_styles.insert(TextStyle::Button,     FontId::new(13.5, FontFamily::Proportional));
+    style.text_styles.insert(TextStyle::Button,     FontId::new(13.5, semi));
     style.text_styles.insert(TextStyle::Small,      FontId::new(11.5, FontFamily::Proportional));
     style.text_styles.insert(TextStyle::Monospace,  FontId::new(12.5, FontFamily::Monospace));
 

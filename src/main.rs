@@ -13,6 +13,7 @@ mod timer;
 struct Args {
     mode: String,
     admin_name: String,
+    admin_email: String,
     timeout: u64,
     session_id: String,
     chat_socket: String,
@@ -22,6 +23,7 @@ fn parse_args() -> Args {
     let mut a = Args {
         mode: String::new(),
         admin_name: "IT Support".to_string(),
+        admin_email: String::new(),
         timeout: 30,
         session_id: String::new(),
         chat_socket: String::new(),
@@ -32,6 +34,8 @@ fn parse_args() -> Args {
             a.mode = v.to_string();
         } else if let Some(v) = raw.strip_prefix("--admin-name=") {
             a.admin_name = v.to_string();
+        } else if let Some(v) = raw.strip_prefix("--admin-email=") {
+            a.admin_email = v.to_string();
         } else if let Some(v) = raw.strip_prefix("--timeout=") {
             a.timeout = v.parse().unwrap_or(30);
         } else if let Some(v) = raw.strip_prefix("--session-id=") {
@@ -64,6 +68,11 @@ fn parse_args() -> Args {
             }
         }
     }
+    if let Ok(v) = std::env::var("SECOPS_ADMIN_EMAIL") {
+        if !v.is_empty() {
+            a.admin_email = v;
+        }
+    }
 
     if a.timeout == 0 {
         a.timeout = 30;
@@ -76,7 +85,7 @@ fn print_usage() {
         "secops-endpoint-ui — end-user GUI for SecOps remote desktop\n\
          \n\
          USAGE:\n\
-            secops-endpoint-ui --mode=consent  [--admin-name=<n>] [--timeout=<s>] [--session-id=<id>]\n\
+            secops-endpoint-ui --mode=consent  [--admin-name=<n>] [--admin-email=<e>] [--timeout=<s>] [--session-id=<id>]\n\
             secops-endpoint-ui --mode=session  [--admin-name=<n>]                  [--session-id=<id>] [--chat-socket=<host:port>]\n\
          \n\
          consent mode emits one JSON line on stdout: {{\"result\":\"accepted|declined\",\"session_id\":\"<id>\"}}\n\
@@ -98,7 +107,7 @@ fn main() -> Result<(), eframe::Error> {
     let args = parse_args();
 
     match args.mode.as_str() {
-        "consent" => consent::run(args.admin_name, args.session_id, args.timeout),
+        "consent" => consent::run(args.admin_name, args.admin_email, args.session_id, args.timeout),
         "session" => session::run(args.admin_name, args.session_id, args.chat_socket),
         _ => {
             print_usage();

@@ -12,21 +12,18 @@ final class ConsentDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let m = ConsentModel(
-            adminName: config.adminName,
-            sessionId: config.sessionId,
-            timeout:   config.timeout
+            adminName:  config.adminName,
+            adminEmail: config.adminEmail,
+            sessionId:  config.sessionId,
+            timeout:    config.timeout
         )
         self.model = m
 
         DispatchQueue.main.async { [self] in
             let hv = NSHostingView(rootView: ConsentView(model: m))
 
-            // Use NSPanel so we get hidesOnDeactivate control. NSWindow at
-            // .floating level can lose its Z-order on macOS 14 when another app
-            // activates; NSPanel with hidesOnDeactivate=false stays visible and
-            // on top regardless of which app has focus.
             let panel = NSPanel(
-                contentRect: NSRect(x: 0, y: 0, width: 520, height: 420),
+                contentRect: NSRect(x: 0, y: 0, width: 460, height: 490),
                 styleMask:   [.titled, .closable],
                 backing:     .buffered,
                 defer:       false
@@ -36,7 +33,7 @@ final class ConsentDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             panel.center()
             panel.level                = .floating
             panel.isReleasedWhenClosed = false
-            panel.hidesOnDeactivate    = false   // stay visible when user switches apps
+            panel.hidesOnDeactivate    = false
             panel.collectionBehavior   = [.canJoinAllSpaces, .fullScreenAuxiliary]
             panel.delegate             = self
             panel.makeKeyAndOrderFront(nil)
@@ -56,20 +53,22 @@ final class ConsentDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 // MARK: - Model
 
 final class ConsentModel: ObservableObject {
-    let adminName: String
-    let sessionId: String
-    let total: Double
+    let adminName:  String
+    let adminEmail: String
+    let sessionId:  String
+    let total:      Double
     @Published var remaining: Double
 
     private var outputWritten = false
     private var timer: Timer?
 
-    init(adminName: String, sessionId: String, timeout: UInt64) {
-        self.adminName = adminName
-        self.sessionId = sessionId
-        let t = Double(max(timeout, 1))
-        self.total     = t
-        self.remaining = t
+    init(adminName: String, adminEmail: String, sessionId: String, timeout: UInt64) {
+        self.adminName  = adminName
+        self.adminEmail = adminEmail
+        self.sessionId  = sessionId
+        let t           = Double(max(timeout, 1))
+        self.total      = t
+        self.remaining  = t
 
         let t2 = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: true) { [weak self] _ in
             guard let self, !self.outputWritten else { return }
@@ -98,91 +97,136 @@ final class ConsentModel: ObservableObject {
     deinit { timer?.invalidate() }
 }
 
-// MARK: - View
+// MARK: - Circular timer
+
+private struct CircularTimerView: View {
+    let fraction:  Double
+    let remaining: Int
+    let color:     Color
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .stroke(Color.primary.opacity(0.10), lineWidth: 5)
+            Circle()
+                .trim(from: 0, to: max(0.01, fraction))
+                .stroke(color, style: StrokeStyle(lineWidth: 5, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+                .animation(.linear(duration: 0.9), value: fraction)
+            Text("\(remaining)")
+                .font(.system(size: 18, weight: .semibold, design: .rounded))
+                .foregroundColor(color)
+                .monospacedDigit()
+        }
+        .frame(width: 58, height: 58)
+    }
+}
+
+// MARK: - Permission row
+
+private struct PermissionRowView: View {
+    let systemName: String
+    let text:       String
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: systemName)
+                .font(.system(size: 14))
+                .foregroundColor(.accentColor)
+                .frame(width: 20)
+            Text(text)
+                .font(.system(size: 13.5))
+        }
+    }
+}
+
+// MARK: - Consent view
 
 struct ConsentView: View {
     @ObservedObject var model: ConsentModel
 
     private var countdownColor: Color {
-        model.remaining <= 5 ? .red : model.remaining <= 15 ? .orange : .green
+        model.remaining <= 5 ? .red : model.remaining <= 15 ? .orange : .accentColor
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
 
-            // ── Hero row ──────────────────────────────────────────────────
+            // ── Header: circular timer + title/subtitles ──────────────────
             HStack(alignment: .top, spacing: 14) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(Color.accentColor.opacity(0.1))
-                        .frame(width: 48, height: 48)
-                    Image(systemName: "shield.fill")
-                        .font(.system(size: 22))
-                        .foregroundColor(.accentColor)
-                }
-                VStack(alignment: .leading, spacing: 4) {
+                CircularTimerView(
+                    fraction:  model.remaining / model.total,
+                    remaining: max(0, Int(ceil(model.remaining))),
+                    color:     countdownColor
+                )
+                .padding(.top, 2)
+
+                VStack(alignment: .leading, spacing: 5) {
                     Text("Remote Access Request")
                         .font(.system(size: 18, weight: .semibold))
+                        .foregroundColor(Color(nsColor: .labelColor))
                     Text("A technician is requesting permission to view and control your screen.")
                         .font(.system(size: 12.5))
                         .foregroundColor(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
+                    Text("Approve only if you initiated this request.")
+                        .font(.system(size: 12))
+                        .foregroundColor(Color(nsColor: .tertiaryLabelColor))
                 }
             }
-            .padding(.horizontal, 28)
-            .padding(.top, 24)
-            .padding(.bottom, 20)
+            .padding(.bottom, 18)
 
-            // ── Detail card ───────────────────────────────────────────────
-            VStack(spacing: 0) {
-                kvRow("REQUESTED BY") {
-                    HStack(spacing: 10) {
-                        AvatarView(name: model.adminName, size: 24)
-                        Text(model.adminName).font(.system(size: 13, weight: .semibold))
-                    }
-                }
-                Divider()
-                kvRow("EXPIRES IN") {
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack {
-                            Text("\(max(0, Int(ceil(model.remaining))))s")
-                                .font(.system(size: 14, weight: .bold).monospacedDigit())
-                                .foregroundColor(countdownColor)
-                            Spacer()
-                            Text("auto-decline at 0s")
-                                .font(.system(size: 10.5))
-                                .foregroundColor(.secondary.opacity(0.7))
-                        }
-                        GeometryReader { geo in
-                            ZStack(alignment: .leading) {
-                                Capsule().fill(Color.secondary.opacity(0.15)).frame(height: 4)
-                                Capsule()
-                                    .fill(countdownColor)
-                                    .frame(
-                                        width: max(0, geo.size.width * CGFloat(model.remaining / model.total)),
-                                        height: 4
-                                    )
-                            }
-                        }
-                        .frame(height: 4)
-                    }
-                }
-                Divider()
-                kvRow("PRIVACY") {
-                    HStack(spacing: 10) {
-                        Image(systemName: "eye")
+            // ── Admin identity card ───────────────────────────────────────
+            HStack(spacing: 12) {
+                AvatarView(name: model.adminName, size: 40)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(model.adminName)
+                        .font(.system(size: 14.5, weight: .semibold))
+                    if !model.adminEmail.isEmpty {
+                        Text(model.adminEmail)
                             .font(.system(size: 12))
                             .foregroundColor(.secondary)
-                        Text("Your screen activity will be visible to the technician")
-                            .font(.system(size: 12.5))
-                            .foregroundColor(.secondary)
                     }
                 }
+                Spacer()
             }
-            .background(Color(NSColor.controlBackgroundColor))
-            .cornerRadius(10)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .frame(maxWidth: .infinity)
+            .background(Color(nsColor: .controlBackgroundColor))
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.secondary.opacity(0.2), lineWidth: 1))
-            .padding(.horizontal, 28)
+            .padding(.bottom, 18)
+
+            // ── Permissions ───────────────────────────────────────────────
+            Text("PERMISSIONS REQUESTED")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(.secondary)
+                .padding(.bottom, 10)
+
+            VStack(alignment: .leading, spacing: 9) {
+                PermissionRowView(systemName: "eye",                   text: "View your screen")
+                PermissionRowView(systemName: "computermouse",         text: "Control mouse & keyboard")
+                PermissionRowView(systemName: "arrow.up.arrow.down",   text: "Can download/upload files from/to the system")
+            }
+            .padding(.bottom, 18)
+
+            // ── Encryption note ───────────────────────────────────────────
+            HStack(spacing: 8) {
+                Image(systemName: "lock.fill")
+                    .font(.system(size: 13))
+                    .foregroundColor(.accentColor)
+                Text("Session is end-to-end encrypted and audit-logged.")
+                    .font(.system(size: 12.5))
+                    .foregroundColor(.accentColor)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.accentColor.opacity(0.08))
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .padding(.bottom, 22)
 
             // ── Action buttons ────────────────────────────────────────────
             HStack {
@@ -196,48 +240,28 @@ struct ConsentView: View {
                     .buttonStyle(.borderedProminent)
                     .controlSize(.large)
             }
-            .padding(.horizontal, 28)
-            .padding(.top, 20)
+            .padding(.bottom, 14)
 
             Spacer()
 
             // ── Footer ────────────────────────────────────────────────────
-            HStack(spacing: 5) {
+            HStack(spacing: 4) {
                 Image(systemName: "shield")
-                    .font(.system(size: 9))
-                    .foregroundColor(.secondary.opacity(0.4))
-                Text("SecOps Solution")
-                    .font(.system(size: 10.5, weight: .semibold))
-                    .foregroundColor(.secondary.opacity(0.4))
-                Text("·").foregroundColor(.secondary.opacity(0.4))
+                    .font(.system(size: 10))
+                Text("SecOps Solution").fontWeight(.semibold)
+                Text("·")
                 Text("Managed by your IT department")
-                    .font(.system(size: 10.5))
-                    .foregroundColor(.secondary.opacity(0.4))
-                Spacer()
             }
-            .padding(.horizontal, 28)
-            .padding(.bottom, 16)
+            .font(.system(size: 10.5))
+            .foregroundColor(Color(nsColor: .tertiaryLabelColor))
         }
-        .frame(width: 520, height: 420)
-        .background(Color(NSColor.windowBackgroundColor))
+        .padding(24)
+        .frame(width: 460, height: 490)
+        .background(Color(nsColor: .windowBackgroundColor))
     }
 }
 
-// MARK: - Shared helpers (used in SessionWindow too)
-
-@ViewBuilder
-func kvRow<Content: View>(_ label: String, @ViewBuilder content: () -> Content) -> some View {
-    HStack(alignment: .center, spacing: 0) {
-        Text(label)
-            .font(.system(size: 10.5, weight: .semibold))
-            .foregroundColor(.secondary)
-            .frame(width: 110, alignment: .leading)
-        content()
-        Spacer()
-    }
-    .padding(.horizontal, 16)
-    .padding(.vertical, 10)
-}
+// MARK: - Avatar (shared with SessionWindow)
 
 struct AvatarView: View {
     let name: String

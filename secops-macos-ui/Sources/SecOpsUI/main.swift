@@ -3,6 +3,7 @@ import AppKit
 struct AppConfig {
     var mode       = ""
     var adminName  = "IT Support"
+    var adminEmail = ""
     var timeout: UInt64 = 30
     var sessionId  = ""
     var chatSocket = ""
@@ -11,18 +12,20 @@ struct AppConfig {
 private func parseArgs() -> AppConfig {
     var c = AppConfig()
     for arg in CommandLine.arguments.dropFirst() {
-        if      let v = arg.strippingPrefix("--mode=")        { c.mode = v }
+        if      let v = arg.strippingPrefix("--mode=")         { c.mode = v }
         else if let v = arg.strippingPrefix("--admin-name=")  { c.adminName = v }
+        else if let v = arg.strippingPrefix("--admin-email=") { c.adminEmail = v }
         else if let v = arg.strippingPrefix("--timeout="),
                 let n = UInt64(v)                             { c.timeout = n }
         else if let v = arg.strippingPrefix("--session-id=")  { c.sessionId = v }
         else if let v = arg.strippingPrefix("--chat-socket=") { c.chatSocket = v }
     }
     let env = ProcessInfo.processInfo.environment
-    if c.mode.isEmpty       { c.mode       = env["SECOPS_MODE"]        ?? "" }
-    if c.sessionId.isEmpty  { c.sessionId  = env["SECOPS_SESSION_ID"]  ?? "" }
-    if c.chatSocket.isEmpty { c.chatSocket = env["SECOPS_CHAT_SOCKET"] ?? "" }
-    if let v = env["SECOPS_ADMIN_NAME"], !v.isEmpty { c.adminName = v }
+    if c.mode.isEmpty        { c.mode       = env["SECOPS_MODE"]        ?? "" }
+    if c.sessionId.isEmpty   { c.sessionId  = env["SECOPS_SESSION_ID"]  ?? "" }
+    if c.chatSocket.isEmpty  { c.chatSocket = env["SECOPS_CHAT_SOCKET"] ?? "" }
+    if let v = env["SECOPS_ADMIN_NAME"],  !v.isEmpty { c.adminName  = v }
+    if let v = env["SECOPS_ADMIN_EMAIL"], !v.isEmpty { c.adminEmail = v }
     if c.timeout == 0 { c.timeout = 30 }
     return c
 }

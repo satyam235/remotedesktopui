@@ -7,7 +7,7 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "secops-macos-ui",
-            path: "Sources"
+            path: "Sources/SecOpsUI"
         )
     ]
 )

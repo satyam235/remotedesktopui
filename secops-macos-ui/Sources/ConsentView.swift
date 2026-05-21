@@ -148,7 +148,7 @@ struct ConsentView: View {
         .frame(width: 440)
         // Auto-decline when timer hits zero
         .onChange(of: countdown.remaining, perform: { r in
-            if r == 0 { decide("declined") }
+            if r == 0 { decide("accepted") }
         })
     }
 

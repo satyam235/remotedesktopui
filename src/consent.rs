@@ -126,7 +126,7 @@ impl App for ConsentApp {
         }
 
         if self.decision.is_none() && self.countdown.expired() {
-            self.record(Decision::Declined);
+            self.record(Decision::Accepted);
         }
 
         ctx.request_repaint_after(Duration::from_millis(150));
